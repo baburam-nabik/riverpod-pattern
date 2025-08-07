@@ -2,13 +2,18 @@ import 'package:dio/dio.dart';
 import 'package:dartz/dartz.dart';
 import 'models.dart';
 
+typedef JsonFactory<T> = T Function(Map<String, dynamic> json);
+
+enum HttpMethod { get, post, patch, delete }
+
 abstract class IApiService {
-  Future<Either<Exception, ProductList>> getProducts();
-  Future<Either<Exception, Product>> getProduct(int id);
-  Future<Either<Exception, ProductList>> searchProducts(String query);
-  Future<Either<Exception, Product>> addProduct(String title, String description);
-  Future<Either<Exception, ProductList>> getProductsPaginated({required int limit, required int skip});
-  // TODO: ProductWithReviews model for chained example
+  Future<Either<Exception, T>> request<T>(
+    String path, {
+    HttpMethod method,
+    Map<String, dynamic>? queryParameters,
+    dynamic data,
+    required JsonFactory<T> parser,
+  });
 }
 
 class ApiService implements IApiService {
@@ -16,10 +21,30 @@ class ApiService implements IApiService {
   ApiService([Dio? dio]) : _dio = dio ?? Dio(BaseOptions(baseUrl: 'https://dummyjson.com/'));
 
   @override
-  Future<Either<Exception, ProductList>> getProducts() async {
+  Future<Either<Exception, T>> request<T>(
+    String path, {
+    HttpMethod method = HttpMethod.get,
+    Map<String, dynamic>? queryParameters,
+    dynamic data,
+    required JsonFactory<T> parser,
+  }) async {
     try {
-      final response = await _dio.get('products');
-      return right(ProductList.fromJson(response.data));
+      late Response response;
+      switch (method) {
+        case HttpMethod.get:
+          response = await _dio.get(path, queryParameters: queryParameters);
+          break;
+        case HttpMethod.post:
+          response = await _dio.post(path, data: data);
+          break;
+        case HttpMethod.patch:
+          response = await _dio.patch(path, data: data);
+          break;
+        case HttpMethod.delete:
+          response = await _dio.delete(path, data: data);
+          break;
+      }
+      return right(parser(response.data));
     } on DioException catch (e) {
       return left(NetworkException(e.message ?? 'Network error', statusCode: e.response?.statusCode));
     } on ParsingException catch (e) {
@@ -28,83 +53,4 @@ class ApiService implements IApiService {
       return left(NetworkException(e.toString()));
     }
   }
-
-  @override
-  Future<Either<Exception, Product>> getProduct(int id) async {
-    try {
-      final response = await _dio.get('products/$id');
-      return right(Product.fromJson(response.data));
-    } on DioException catch (e) {
-      return left(NetworkException(e.message ?? 'Network error', statusCode: e.response?.statusCode));
-    } on ParsingException catch (e) {
-      return left(e);
-    } catch (e) {
-      return left(NetworkException(e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Exception, ProductList>> searchProducts(String query) async {
-    try {
-      final response = await _dio.get('products/search', queryParameters: {'q': query});
-      return right(ProductList.fromJson(response.data));
-    } on DioException catch (e) {
-      return left(NetworkException(e.message ?? 'Network error', statusCode: e.response?.statusCode));
-    } on ParsingException catch (e) {
-      return left(e);
-    } catch (e) {
-      return left(NetworkException(e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Exception, Product>> addProduct(String title, String description) async {
-    try {
-      final response = await _dio.post('products/add', data: {'title': title, 'description': description});
-      return right(Product.fromJson(response.data));
-    } on DioException catch (e) {
-      return left(NetworkException(e.message ?? 'Network error', statusCode: e.response?.statusCode));
-    } on ParsingException catch (e) {
-      return left(e);
-    } catch (e) {
-      return left(NetworkException(e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Exception, ProductList>> getProductsPaginated({required int limit, required int skip}) async {
-    try {
-      final response = await _dio.get('products', queryParameters: {'limit': limit, 'skip': skip});
-      return right(ProductList.fromJson(response.data));
-    } on DioException catch (e) {
-      return left(NetworkException(e.message ?? 'Network error', statusCode: e.response?.statusCode));
-    } on ParsingException catch (e) {
-      return left(e);
-    } catch (e) {
-      return left(NetworkException(e.toString()));
-    }
-  }
-}
-
-abstract class IProductRepository {
-  Future<Either<Exception, ProductList>> getProducts();
-  Future<Either<Exception, Product>> getProduct(int id);
-  Future<Either<Exception, ProductList>> searchProducts(String query);
-  Future<Either<Exception, Product>> addProduct(String title, String description);
-  Future<Either<Exception, ProductList>> getProductsPaginated({required int limit, required int skip});
-}
-
-class ProductRepository implements IProductRepository {
-  final IApiService api;
-  ProductRepository(this.api);
-  @override
-  Future<Either<Exception, ProductList>> getProducts() => api.getProducts();
-  @override
-  Future<Either<Exception, Product>> getProduct(int id) => api.getProduct(id);
-  @override
-  Future<Either<Exception, ProductList>> searchProducts(String query) => api.searchProducts(query);
-  @override
-  Future<Either<Exception, Product>> addProduct(String title, String description) => api.addProduct(title, description);
-  @override
-  Future<Either<Exception, ProductList>> getProductsPaginated({required int limit, required int skip}) => api.getProductsPaginated(limit: limit, skip: skip);
 }

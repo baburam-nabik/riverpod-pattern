@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stateman/api_service.dart';
 import 'package:stateman/models.dart';
+import 'package:stateman/repository.dart';
 import 'package:dartz/dartz.dart';
 
 void main() {
@@ -25,17 +26,17 @@ class MyApp extends StatelessWidget {
 
 // Providers for SOLID/Model/Exception-based networking
 final apiServiceProvider = Provider<IApiService>((ref) => ApiService());
-final productRepositoryProvider = Provider<IProductRepository>((ref) => ProductRepository(ref.read(apiServiceProvider)));
+final apiRepositoryProvider = Provider<IApiRepository>((ref) => ApiRepository(ref.read(apiServiceProvider)));
 final productsProvider = FutureProvider<Either<Exception, ProductList>>((ref) {
-  final repo = ref.read(productRepositoryProvider);
+  final repo = ref.read(apiRepositoryProvider);
   return repo.getProducts();
 });
 final productProvider = FutureProvider.family<Either<Exception, Product>, int>((ref, id) {
-  final repo = ref.read(productRepositoryProvider);
+  final repo = ref.read(apiRepositoryProvider);
   return repo.getProduct(id);
 });
 final searchProductsProvider = FutureProvider.family<Either<Exception, ProductList>, String>((ref, query) {
-  final repo = ref.read(productRepositoryProvider);
+  final repo = ref.read(apiRepositoryProvider);
   return repo.searchProducts(query);
 });
 
@@ -51,7 +52,7 @@ defaultErrorMessage(Exception e) {
 
 // 1. API Call on Button Tap
 class ProductsNotifier extends StateNotifier<AsyncValue<Either<Exception, ProductList>>> {
-  final IProductRepository repo;
+  final IApiRepository repo;
   ProductsNotifier(this.repo) : super(AsyncValue.data(Right(ProductList(products: []))));
   Future<void> fetchProducts() async {
     state = const AsyncValue.loading();
@@ -60,7 +61,7 @@ class ProductsNotifier extends StateNotifier<AsyncValue<Either<Exception, Produc
   }
 }
 final productsNotifierProvider = StateNotifierProvider<ProductsNotifier, AsyncValue<Either<Exception, ProductList>>>(
-  (ref) => ProductsNotifier(ref.read(productRepositoryProvider)),
+  (ref) => ProductsNotifier(ref.read(apiRepositoryProvider)),
 );
 class ApiOnTapScreen extends ConsumerWidget {
   const ApiOnTapScreen({super.key});
@@ -94,7 +95,7 @@ class ApiOnTapScreen extends ConsumerWidget {
 
 // 2. API Call on Screen Open
 final productsOnOpenProvider = FutureProvider<Either<Exception, ProductList>>((ref) {
-  final repo = ref.read(productRepositoryProvider);
+  final repo = ref.read(apiRepositoryProvider);
   return repo.getProducts();
 });
 class ApiOnOpenScreen extends ConsumerWidget {
@@ -123,7 +124,7 @@ class ApiOnOpenScreen extends ConsumerWidget {
 
 // 3. Mutation (Add Product)
 class AddProductNotifier extends StateNotifier<AsyncValue<Either<Exception, Product>>> {
-  final IProductRepository repo;
+  final IApiRepository repo;
   AddProductNotifier(this.repo)
       : super(AsyncValue.data(Right(Product(id: 0, title: '', description: ''))));
   Future<void> addProduct(String title, String description) async {
@@ -132,8 +133,8 @@ class AddProductNotifier extends StateNotifier<AsyncValue<Either<Exception, Prod
     state = AsyncValue.data(result);
   }
 }
-final addProductNotifierProvider = StateNotifierProvider<AddProductNotifier, AsyncValue<Either<Exception, Product>?>>(
-  (ref) => AddProductNotifier(ref.read(productRepositoryProvider)),
+final addProductNotifierProvider = StateNotifierProvider<AddProductNotifier, AsyncValue<Either<Exception, Product>>>(
+  (ref) => AddProductNotifier(ref.read(apiRepositoryProvider)),
 );
 class AddProductScreen extends ConsumerStatefulWidget {
   const AddProductScreen({super.key});
@@ -185,14 +186,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             const SizedBox(height: 24),
             Expanded(
               child: addState.when(
-                data: (result) => result == null
-                    ? const Text('Fill the form and submit to add a product')
-                    : result.fold(
-                        (err) => Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red)),
-                        (product) => product.id == 0
-                            ? const Text('Fill the form and submit to add a product')
-                            : Text('Product added: ${product.title}', style: const TextStyle(color: Colors.green)),
-                      ),
+                data: (result) => result.fold(
+                  (err) => Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red)),
+                  (product) => product.id == 0
+                      ? const Text('Fill the form and submit to add a product')
+                      : Text('Product added: ${product.title}', style: const TextStyle(color: Colors.green)),
+                ),
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
               ),
@@ -206,7 +205,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
 // 4. Pagination (Load More Products)
 class PaginationNotifier extends StateNotifier<AsyncValue<List<Product>>> {
-  final IProductRepository repo;
+  final IApiRepository repo;
   static const int pageSize = 10;
   int _skip = 0;
   bool _hasMore = true;
@@ -231,7 +230,7 @@ class PaginationNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   }
 }
 final paginationNotifierProvider = StateNotifierProvider<PaginationNotifier, AsyncValue<List<Product>>>(
-  (ref) => PaginationNotifier(ref.read(productRepositoryProvider)),
+  (ref) => PaginationNotifier(ref.read(apiRepositoryProvider)),
 );
 class PaginationScreen extends ConsumerWidget {
   const PaginationScreen({super.key});
@@ -273,12 +272,12 @@ class PaginationScreen extends ConsumerWidget {
 
 // 5. Chained Providers (select product, then fetch details)
 final allProductsProvider = FutureProvider<ProductList>((ref) async {
-  final repo = ref.read(productRepositoryProvider);
+  final repo = ref.read(apiRepositoryProvider);
   final result = await repo.getProducts();
   return result.fold((err) => ProductList(products: []), (products) => products);
 });
 final productDetailsProvider = FutureProvider.family<Either<Exception, Product>, int>((ref, id) {
-  final repo = ref.read(productRepositoryProvider);
+  final repo = ref.read(apiRepositoryProvider);
   return repo.getProduct(id);
 });
 class ChainedProvidersScreen extends ConsumerStatefulWidget {
@@ -338,7 +337,7 @@ class _ChainedProvidersScreenState extends ConsumerState<ChainedProvidersScreen>
 
 // 6. Optimistic UI Update (edit product title in list, update UI immediately, reconcile with server)
 class OptimisticUpdateNotifier extends StateNotifier<AsyncValue<List<Product>>> {
-  final IProductRepository repo;
+  final IApiRepository repo;
   OptimisticUpdateNotifier(this.repo) : super(const AsyncValue.loading()) {
     _fetchProducts();
   }
@@ -359,16 +358,11 @@ class OptimisticUpdateNotifier extends StateNotifier<AsyncValue<List<Product>>> 
     final oldProduct = _products[idx];
     _products[idx] = Product(id: oldProduct.id, title: newTitle, description: oldProduct.description);
     state = AsyncValue.data(List.from(_products));
-    // No real API update, just simulate delay and revert on error
     await Future.delayed(const Duration(milliseconds: 500));
-    // Simulate always success for demo
-    // To simulate error, uncomment below:
-    // _products[idx] = oldProduct;
-    // state = AsyncValue.error(NetworkException('Failed to update'), StackTrace.current);
   }
 }
 final optimisticUpdateNotifierProvider = StateNotifierProvider<OptimisticUpdateNotifier, AsyncValue<List<Product>>>(
-  (ref) => OptimisticUpdateNotifier(ref.read(productRepositoryProvider)),
+  (ref) => OptimisticUpdateNotifier(ref.read(apiRepositoryProvider)),
 );
 class OptimisticUpdateScreen extends ConsumerWidget {
   const OptimisticUpdateScreen({super.key});
