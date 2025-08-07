@@ -1,6 +1,7 @@
 import 'package:dartz/dartz.dart';
 import 'models.dart';
 import 'api_service.dart';
+// No direct dependency on AppException needed here
 
 abstract class IApiRepository {
   Future<Either<Exception, ProductList>> getProducts();

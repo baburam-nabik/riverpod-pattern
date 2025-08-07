@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:dartz/dartz.dart';
-import 'models.dart';
+import 'app_exception.dart';
 
 typedef JsonFactory<T> = T Function(Map<String, dynamic> json);
 
@@ -45,12 +45,8 @@ class ApiService implements IApiService {
           break;
       }
       return right(parser(response.data));
-    } on DioException catch (e) {
-      return left(NetworkException(e.message ?? 'Network error', statusCode: e.response?.statusCode));
-    } on ParsingException catch (e) {
-      return left(e);
     } catch (e) {
-      return left(NetworkException(e.toString()));
+      return left(AppException.from(e));
     }
   }
 }

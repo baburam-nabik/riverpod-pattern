@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stateman/api_service.dart';
 import 'package:stateman/models.dart';
 import 'package:stateman/repository.dart';
+import 'package:stateman/app_exception.dart';
 import 'package:dartz/dartz.dart';
 
 void main() {

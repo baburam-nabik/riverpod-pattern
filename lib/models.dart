@@ -1,24 +1,4 @@
-// Models and custom exceptions for the app
-
-abstract class AppException implements Exception {
-  final int? statusCode;
-  final String message;
-  const AppException(this.message, {this.statusCode});
-  @override
-  String toString() => 'AppException($statusCode): $message';
-}
-
-class NetworkException extends AppException {
-  const NetworkException(String message, {int? statusCode}) : super(message, statusCode: statusCode);
-  @override
-  String toString() => 'NetworkException($statusCode): $message';
-}
-
-class ParsingException extends AppException {
-  const ParsingException(String message, {int? statusCode}) : super(message, statusCode: statusCode);
-  @override
-  String toString() => 'ParsingException($statusCode): $message';
-}
+// Models only
 
 class Product {
   final int id;
@@ -33,7 +13,7 @@ class Product {
         description: json['description'] as String,
       );
     } catch (e) {
-      throw const ParsingException('Failed to parse Product');
+      throw const FormatException('Failed to parse Product');
     }
   }
 }
@@ -48,7 +28,7 @@ class ProductList {
           .toList();
       return ProductList(products: products);
     } catch (e) {
-      throw const ParsingException('Failed to parse ProductList');
+      throw const FormatException('Failed to parse ProductList');
     }
   }
 }
