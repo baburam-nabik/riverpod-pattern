@@ -23,13 +23,16 @@ abstract class AppException implements Exception {
 }
 
 class NetworkException extends AppException {
-  const NetworkException(String message, {int? statusCode}) : super(message, statusCode: statusCode);
+  const NetworkException(String message, {int? statusCode})
+    : super(message, statusCode: statusCode);
 }
 
 class ParsingException extends AppException {
-  const ParsingException(String message, {int? statusCode}) : super(message, statusCode: statusCode);
+  const ParsingException(String message, {int? statusCode})
+    : super(message, statusCode: statusCode);
 }
 
 class UnknownException extends AppException {
-  const UnknownException(String message, {int? statusCode}) : super(message, statusCode: statusCode);
+  const UnknownException(String message, {int? statusCode})
+    : super(message, statusCode: statusCode);
 }

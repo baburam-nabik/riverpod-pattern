@@ -1,10 +1,11 @@
+import 'package:dartz/dartz.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:stateman/api_service.dart';
-import 'package:stateman/models.dart';
-import 'package:stateman/repository.dart';
 import 'package:stateman/app_exception.dart';
-import 'package:dartz/dartz.dart';
+import 'package:stateman/error_screen.dart';
+import 'package:stateman/models.dart';
+import 'package:stateman/providers.dart';
+import 'package:stateman/repository.dart';
 
 void main() {
   runApp(const ProviderScope(child: MyApp()));
@@ -17,29 +18,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
+      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple)),
       home: const SampleHomeScreen(),
     );
   }
 }
-
-// Providers for SOLID/Model/Exception-based networking
-final apiServiceProvider = Provider<IApiService>((ref) => ApiService());
-final apiRepositoryProvider = Provider<IApiRepository>((ref) => ApiRepository(ref.read(apiServiceProvider)));
-final productsProvider = FutureProvider<Either<Exception, ProductList>>((ref) {
-  final repo = ref.read(apiRepositoryProvider);
-  return repo.getProducts();
-});
-final productProvider = FutureProvider.family<Either<Exception, Product>, int>((ref, id) {
-  final repo = ref.read(apiRepositoryProvider);
-  return repo.getProduct(id);
-});
-final searchProductsProvider = FutureProvider.family<Either<Exception, ProductList>, String>((ref, query) {
-  final repo = ref.read(apiRepositoryProvider);
-  return repo.searchProducts(query);
-});
 
 // Helper to extract user-friendly error messages
 defaultErrorMessage(Exception e) {
@@ -61,9 +44,11 @@ class ProductsNotifier extends StateNotifier<AsyncValue<Either<Exception, Produc
     state = AsyncValue.data(result);
   }
 }
+
 final productsNotifierProvider = StateNotifierProvider<ProductsNotifier, AsyncValue<Either<Exception, ProductList>>>(
   (ref) => ProductsNotifier(ref.read(apiRepositoryProvider)),
 );
+
 class ApiOnTapScreen extends ConsumerWidget {
   const ApiOnTapScreen({super.key});
   @override
@@ -73,18 +58,22 @@ class ApiOnTapScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('API on Tap')),
       body: productsState.when(
         data: (result) => result.fold(
-          (err) => Center(child: Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red))),
+          (err) => Center(
+            child: Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red)),
+          ),
           (productList) => productList.products.isEmpty
               ? const Center(child: Text('Press the button to load products'))
               : ListView.builder(
                   itemCount: productList.products.length,
-                  itemBuilder: (context, idx) => ListTile(
-                    title: Text(productList.products[idx].title),
-                  ),
+                  itemBuilder: (context, idx) => ListTile(title: Text(productList.products[idx].title)),
                 ),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red))),
+        error: (e, _) => e is AppException
+            ? ErrorScreen(exception: e)
+            : Center(
+                child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
+              ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => ref.read(productsNotifierProvider.notifier).fetchProducts(),
@@ -99,6 +88,7 @@ final productsOnOpenProvider = FutureProvider<Either<Exception, ProductList>>((r
   final repo = ref.read(apiRepositoryProvider);
   return repo.getProducts();
 });
+
 class ApiOnOpenScreen extends ConsumerWidget {
   const ApiOnOpenScreen({super.key});
   @override
@@ -108,16 +98,20 @@ class ApiOnOpenScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('API on Open')),
       body: productsState.when(
         data: (result) => result.fold(
-          (err) => Center(child: Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red))),
+          (err) => Center(
+            child: Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red)),
+          ),
           (productList) => ListView.builder(
             itemCount: productList.products.length,
-            itemBuilder: (context, idx) => ListTile(
-              title: Text(productList.products[idx].title),
-            ),
+            itemBuilder: (context, idx) => ListTile(title: Text(productList.products[idx].title)),
           ),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red))),
+        error: (e, _) => e is AppException
+            ? ErrorScreen(exception: e)
+            : Center(
+                child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
+              ),
       ),
     );
   }
@@ -126,22 +120,24 @@ class ApiOnOpenScreen extends ConsumerWidget {
 // 3. Mutation (Add Product)
 class AddProductNotifier extends StateNotifier<AsyncValue<Either<Exception, Product>>> {
   final IApiRepository repo;
-  AddProductNotifier(this.repo)
-      : super(AsyncValue.data(Right(Product(id: 0, title: '', description: ''))));
+  AddProductNotifier(this.repo) : super(AsyncValue.data(Right(Product(id: 0, title: '', description: ''))));
   Future<void> addProduct(String title, String description) async {
     state = const AsyncValue.loading();
     final result = await repo.addProduct(title, description);
     state = AsyncValue.data(result);
   }
 }
+
 final addProductNotifierProvider = StateNotifierProvider<AddProductNotifier, AsyncValue<Either<Exception, Product>>>(
   (ref) => AddProductNotifier(ref.read(apiRepositoryProvider)),
 );
+
 class AddProductScreen extends ConsumerStatefulWidget {
   const AddProductScreen({super.key});
   @override
   ConsumerState<AddProductScreen> createState() => _AddProductScreenState();
 }
+
 class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _formKey = GlobalKey<FormState>();
   String _title = '';
@@ -194,7 +190,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       : Text('Product added: ${product.title}', style: const TextStyle(color: Colors.green)),
                 ),
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
+                error: (e, _) => e is AppException
+                    ? ErrorScreen(exception: e)
+                    : Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
               ),
             ),
           ],
@@ -219,20 +217,19 @@ class PaginationNotifier extends StateNotifier<AsyncValue<List<Product>>> {
     if (!_hasMore) return;
     state = const AsyncValue.loading();
     final result = await repo.getProductsPaginated(limit: pageSize, skip: _skip);
-    result.fold(
-      (err) => state = AsyncValue.error(err, StackTrace.current),
-      (productList) {
-        if (productList.products.length < pageSize) _hasMore = false;
-        _products.addAll(productList.products);
-        _skip += productList.products.length;
-        state = AsyncValue.data(List.from(_products));
-      },
-    );
+    result.fold((err) => state = AsyncValue.error(err, StackTrace.current), (productList) {
+      if (productList.products.length < pageSize) _hasMore = false;
+      _products.addAll(productList.products);
+      _skip += productList.products.length;
+      state = AsyncValue.data(List.from(_products));
+    });
   }
 }
+
 final paginationNotifierProvider = StateNotifierProvider<PaginationNotifier, AsyncValue<List<Product>>>(
   (ref) => PaginationNotifier(ref.read(apiRepositoryProvider)),
 );
+
 class PaginationScreen extends ConsumerWidget {
   const PaginationScreen({super.key});
   @override
@@ -244,8 +241,7 @@ class PaginationScreen extends ConsumerWidget {
       body: state.when(
         data: (products) => NotificationListener<ScrollNotification>(
           onNotification: (scrollInfo) {
-            if (notifier.hasMore &&
-                scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
+            if (notifier.hasMore && scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
               notifier.fetchMore();
             }
             return false;
@@ -265,7 +261,11 @@ class PaginationScreen extends ConsumerWidget {
           ),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red))),
+        error: (e, _) => e is AppException
+            ? ErrorScreen(exception: e)
+            : Center(
+                child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
+              ),
       ),
     );
   }
@@ -281,11 +281,13 @@ final productDetailsProvider = FutureProvider.family<Either<Exception, Product>,
   final repo = ref.read(apiRepositoryProvider);
   return repo.getProduct(id);
 });
+
 class ChainedProvidersScreen extends ConsumerStatefulWidget {
   const ChainedProvidersScreen({super.key});
   @override
   ConsumerState<ChainedProvidersScreen> createState() => _ChainedProvidersScreenState();
 }
+
 class _ChainedProvidersScreenState extends ConsumerState<ChainedProvidersScreen> {
   int? _selectedId;
   @override
@@ -302,14 +304,11 @@ class _ChainedProvidersScreenState extends ConsumerState<ChainedProvidersScreen>
               data: (products) => DropdownButton<int>(
                 hint: const Text('Select Product'),
                 value: _selectedId,
-                items: products.products.map<DropdownMenuItem<int>>((p) => DropdownMenuItem(
-                  value: p.id,
-                  child: Text(p.title),
-                )).toList(),
+                items: products.products.map<DropdownMenuItem<int>>((p) => DropdownMenuItem(value: p.id, child: Text(p.title))).toList(),
                 onChanged: (id) => setState(() => _selectedId = id),
               ),
               loading: () => const CircularProgressIndicator(),
-              error: (e, _) => Text(defaultErrorMessage(e is Exception ? e : Exception(e))),
+              error: (e, _) => e is AppException ? ErrorScreen(exception: e) : Text(defaultErrorMessage(e is Exception ? e : Exception(e))),
             ),
             const SizedBox(height: 24),
             if (productDetails != null)
@@ -318,17 +317,17 @@ class _ChainedProvidersScreenState extends ConsumerState<ChainedProvidersScreen>
                   data: (result) => result.fold(
                     (err) => Text(defaultErrorMessage(err)),
                     (product) => ListView(
-                      children: [
-                        Text('ID: ${product.id}'),
-                        Text('Title: ${product.title}'),
-                        Text('Description: ${product.description}'),
-                      ],
+                      children: [Text('ID: ${product.id}'), Text('Title: ${product.title}'), Text('Description: ${product.description}')],
                     ),
                   ),
                   loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red))),
+                  error: (e, _) => e is AppException
+                      ? ErrorScreen(exception: e)
+                      : Center(
+                          child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
+                        ),
                 ),
-            ),
+              ),
           ],
         ),
       ),
@@ -345,14 +344,12 @@ class OptimisticUpdateNotifier extends StateNotifier<AsyncValue<List<Product>>> 
   List<Product> _products = [];
   Future<void> _fetchProducts() async {
     final result = await repo.getProducts();
-    result.fold(
-      (err) => state = AsyncValue.error(err, StackTrace.current),
-      (products) {
-        _products = products.products;
-        state = AsyncValue.data(List.from(_products));
-      },
-    );
+    result.fold((err) => state = AsyncValue.error(err, StackTrace.current), (products) {
+      _products = products.products;
+      state = AsyncValue.data(List.from(_products));
+    });
   }
+
   Future<void> updateProductTitle(int id, String newTitle) async {
     final idx = _products.indexWhere((p) => p.id == id);
     if (idx == -1) return;
@@ -362,9 +359,11 @@ class OptimisticUpdateNotifier extends StateNotifier<AsyncValue<List<Product>>> 
     await Future.delayed(const Duration(milliseconds: 500));
   }
 }
+
 final optimisticUpdateNotifierProvider = StateNotifierProvider<OptimisticUpdateNotifier, AsyncValue<List<Product>>>(
   (ref) => OptimisticUpdateNotifier(ref.read(apiRepositoryProvider)),
 );
+
 class OptimisticUpdateScreen extends ConsumerWidget {
   const OptimisticUpdateScreen({super.key});
   @override
@@ -407,7 +406,11 @@ class OptimisticUpdateScreen extends ConsumerWidget {
           },
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red))),
+        error: (e, _) => e is AppException
+            ? ErrorScreen(exception: e)
+            : Center(
+                child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
+              ),
       ),
     );
   }
@@ -424,66 +427,39 @@ class SampleHomeScreen extends StatelessWidget {
         children: [
           ListTile(
             title: const Text('Products (SOLID, Model, Exception)'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProductsScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductsScreen())),
           ),
           ListTile(
             title: const Text('API Call on Button Tap'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ApiOnTapScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ApiOnTapScreen())),
           ),
           ListTile(
             title: const Text('API Call on Screen Open'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ApiOnOpenScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ApiOnOpenScreen())),
           ),
           ListTile(
             title: const Text('Search Products (Parameterized Provider)'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SearchProductsScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchProductsScreen())),
           ),
           ListTile(
             title: const Text('Mutation (Add Product)'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AddProductScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen())),
           ),
           ListTile(
             title: const Text('Pagination (Load More Products)'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PaginationScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaginationScreen())),
           ),
           ListTile(
             title: const Text('Chained Providers'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ChainedProvidersScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChainedProvidersScreen())),
           ),
           ListTile(
             title: const Text('Optimistic UI Update'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const OptimisticUpdateScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OptimisticUpdateScreen())),
           ),
           ListTile(
             title: const Text('Product Details (SOLID)'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProductDetailsScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductDetailsScreen())),
           ),
         ],
       ),
@@ -506,24 +482,54 @@ class PlaceholderScreen extends StatelessWidget {
 // Shows all products using ProductList model
 class ProductsScreen extends ConsumerWidget {
   const ProductsScreen({super.key});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(productsProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Products (SOLID, Model, Exception)')),
       body: state.when(
-        data: (result) => result.fold(
-          (err) => Center(child: Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red))),
-          (productList) => ListView.builder(
-            itemCount: productList.products.length,
-            itemBuilder: (context, idx) => ListTile(
-              title: Text(productList.products[idx].title),
-              subtitle: Text(productList.products[idx].description),
-            ),
-          ),
-        ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red))),
+
+        error: (_, _) => SizedBox.shrink(),
+
+        data: (result) => result.fold(
+          // Left (Failure)
+          (exception) => _buildErrorUI(context, exception),
+
+          // Right (Success)
+          (productList) {
+            if (productList.products.isEmpty) {
+              return const Center(child: Text('No products available.'));
+            }
+
+            return ListView.builder(
+              itemCount: productList.products.length,
+              itemBuilder: (context, index) {
+                final product = productList.products[index];
+                return ListTile(title: Text(product.title), subtitle: Text(product.description));
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorUI(BuildContext context, Exception exception) {
+    if (exception is AppException) {
+      return ErrorScreen(exception: exception); // Custom screen
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text(
+          defaultErrorMessage(exception),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.red, fontSize: 16),
+        ),
       ),
     );
   }
@@ -535,6 +541,7 @@ class SearchProductsScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<SearchProductsScreen> createState() => _SearchProductsScreenState();
 }
+
 class _SearchProductsScreenState extends ConsumerState<SearchProductsScreen> {
   String _query = '';
   @override
@@ -547,28 +554,29 @@ class _SearchProductsScreenState extends ConsumerState<SearchProductsScreen> {
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
-              decoration: const InputDecoration(
-                labelText: 'Search',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Search', border: OutlineInputBorder()),
               onChanged: (val) => setState(() => _query = val),
             ),
           ),
           Expanded(
             child: searchResult.when(
               data: (result) => result.fold(
-                (err) => Center(child: Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red))),
+                (err) => Center(
+                  child: Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red)),
+                ),
                 (productList) => productList.products.isEmpty
                     ? const Center(child: Text('No products found'))
                     : ListView.builder(
                         itemCount: productList.products.length,
-                        itemBuilder: (context, idx) => ListTile(
-                          title: Text(productList.products[idx].title),
-                        ),
+                        itemBuilder: (context, idx) => ListTile(title: Text(productList.products[idx].title)),
                       ),
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red))),
+              error: (e, _) => e is AppException
+                  ? ErrorScreen(exception: e)
+                  : Center(
+                      child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
+                    ),
             ),
           ),
         ],
@@ -583,6 +591,7 @@ class ProductDetailsScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<ProductDetailsScreen> createState() => _ProductDetailsScreenState();
 }
+
 class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
   int? _productId;
   @override
@@ -594,10 +603,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
-              decoration: const InputDecoration(
-                labelText: 'Product ID',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Product ID', border: OutlineInputBorder()),
               keyboardType: TextInputType.number,
               onChanged: (val) => setState(() => _productId = int.tryParse(val)),
             ),
@@ -609,17 +615,19 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   final state = ref.watch(productProvider(_productId!));
                   return state.when(
                     data: (result) => result.fold(
-                      (err) => Center(child: Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red))),
+                      (err) => Center(
+                        child: Text(defaultErrorMessage(err), style: const TextStyle(color: Colors.red)),
+                      ),
                       (product) => ListView(
-                        children: [
-                          Text('ID: ${product.id}'),
-                          Text('Title: ${product.title}'),
-                          Text('Description: ${product.description}'),
-                        ],
+                        children: [Text('ID: ${product.id}'), Text('Title: ${product.title}'), Text('Description: ${product.description}')],
                       ),
                     ),
                     loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (e, _) => Center(child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red))),
+                    error: (e, _) => e is AppException
+                        ? ErrorScreen(exception: e)
+                        : Center(
+                            child: Text(defaultErrorMessage(e is Exception ? e : Exception(e)), style: const TextStyle(color: Colors.red)),
+                          ),
                   );
                 },
               ),

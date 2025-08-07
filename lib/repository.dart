@@ -1,6 +1,7 @@
 import 'package:dartz/dartz.dart';
-import 'models.dart';
+
 import 'api_service.dart';
+import 'models.dart';
 // No direct dependency on AppException needed here
 
 abstract class IApiRepository {
@@ -18,20 +19,24 @@ class ApiRepository implements IApiRepository {
   Future<Either<Exception, ProductList>> getProducts() =>
       api.request<ProductList>('products', parser: (json) => ProductList.fromJson(json));
   @override
-  Future<Either<Exception, Product>> getProduct(int id) =>
-      api.request<Product>('products/$id', parser: (json) => Product.fromJson(json));
+  Future<Either<Exception, Product>> getProduct(int id) => api.request<Product>('products/$id', parser: (json) => Product.fromJson(json));
   @override
   Future<Either<Exception, ProductList>> searchProducts(String query) =>
       api.request<ProductList>('products/search', queryParameters: {'q': query}, parser: (json) => ProductList.fromJson(json));
   @override
-  Future<Either<Exception, Product>> addProduct(String title, String description) =>
-      api.request<Product>('products/add', method: HttpMethod.post, data: {'title': title, 'description': description}, parser: (json) => Product.fromJson(json));
+  Future<Either<Exception, Product>> addProduct(String title, String description) => api.request<Product>(
+    'products/add',
+    method: HttpMethod.post,
+    data: {'title': title, 'description': description},
+    parser: (json) => Product.fromJson(json),
+  );
   @override
   Future<Either<Exception, ProductList>> getProductsPaginated({required int limit, required int skip}) =>
       api.request<ProductList>('products', queryParameters: {'limit': limit, 'skip': skip}, parser: (json) => ProductList.fromJson(json));
 }
 
 abstract class IProductRepository extends IApiRepository {}
+
 class ProductRepository extends ApiRepository implements IProductRepository {
   ProductRepository(IApiService api) : super(api);
 }

@@ -18,7 +18,8 @@ abstract class IApiService {
 
 class ApiService implements IApiService {
   final Dio _dio;
-  ApiService([Dio? dio]) : _dio = dio ?? Dio(BaseOptions(baseUrl: 'https://dummyjson.com/'));
+  ApiService([Dio? dio])
+    : _dio = dio ?? Dio(BaseOptions(baseUrl: 'https://dummyjson.com/'));
 
   @override
   Future<Either<Exception, T>> request<T>(
